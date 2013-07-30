@@ -1,15 +1,15 @@
 Q=@
 E=$(Q)echo
 
-CC=clang
+CC=cc
 LUA=lua
 OUT=dynasm_test
-CCOPTS=-Wall -Werror -std=c99
+CCOPTS=-Wall -Werror -std=c99 -I../
 CCOPTS+=-g -O0 -DDEBUG
 #CCOPTS+=-O2 -DNDEBUG
 
 DASM_F = backend.h
-OBJS   = main.o bc.o vm.o recorder.o util.o compile.o
+OBJS   = main.o vm.o recorder.o compile.o
 
 
 all: $(DASM_F) $(OBJS)
@@ -18,7 +18,7 @@ all: $(DASM_F) $(OBJS)
 
 %.h: %.dasc
 	$(E) "  DynASM" $<
-	$(Q)$(LUA) ./dynasm/dynasm.lua -c $< > $@
+	$(Q)$(LUA) ../dynasm/dynasm.lua -c $< > $@
 
 %.o: %.c
 	$(E) "  " $(CC) $< 
