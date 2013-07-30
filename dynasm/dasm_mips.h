@@ -1,5 +1,5 @@
 /*
-** DynASM PPC encoding engine.
+** DynASM MIPS encoding engine.
 ** Copyright (C) 2005-2013 Mike Pall. All rights reserved.
 ** Released under the MIT license. See dynasm.lua for full copyright notice.
 */
@@ -9,7 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define DASM_ARCH		"ppc"
+#define DASM_ARCH		"mips"
 
 #ifndef DASM_EXTERN
 #define DASM_EXTERN(a,b,c,d)	0
@@ -187,7 +187,7 @@ void dasm_put(Dst_DECL, int start, ...)
   va_start(ap, start);
   while (1) {
     unsigned int ins = *p++;
-    unsigned int action = (ins >> 16);
+    unsigned int action = (ins >> 16) - 0xff00;
     if (action >= DASM__MAX) {
       ofs += 4;
     } else {
@@ -291,7 +291,7 @@ int dasm_link(Dst_DECL, size_t *szp)
       dasm_ActList p = D->actionlist + b[pos++];
       while (1) {
 	unsigned int ins = *p++;
-	unsigned int action = (ins >> 16);
+	unsigned int action = (ins >> 16) - 0xff00;
 	switch (action) {
 	case DASM_STOP: case DASM_SECTION: goto stop;
 	case DASM_ESC: p++; break;
@@ -337,13 +337,13 @@ int dasm_encode(Dst_DECL, void *buffer)
       dasm_ActList p = D->actionlist + *b++;
       while (1) {
 	unsigned int ins = *p++;
-	unsigned int action = (ins >> 16);
+	unsigned int action = (ins >> 16) - 0xff00;
 	int n = (action >= DASM_ALIGN && action < DASM__MAX) ? *b++ : 0;
 	switch (action) {
 	case DASM_STOP: case DASM_SECTION: goto stop;
 	case DASM_ESC: *cp++ = *p++; break;
 	case DASM_REL_EXT:
-	  n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1) - 4;
+	  n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1);
 	  goto patchrel;
 	case DASM_ALIGN:
 	  ins &= 255; while ((((char *)cp - base) & ins)) *cp++ = 0x60000000;
@@ -352,12 +352,16 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  CK(n >= 0, UNDEF_LG);
 	case DASM_REL_PC:
 	  CK(n >= 0, UNDEF_PC);
-	  n = *DASM_POS2PTR(D, n) - (int)((char *)cp - base);
+	  n = *DASM_POS2PTR(D, n);
+	  if (ins & 2048)
+	    n = n - (int)((char *)cp - base);
+	  else
+	    n = (n + (int)base) & 0x0fffffff;
 	patchrel:
 	  CK((n & 3) == 0 &&
-	      (((n+4) + ((ins & 2048) ? 0x00008000 : 0x02000000)) >>
-	       ((ins & 2048) ? 16 : 26)) == 0, RANGE_REL);
-	  cp[-1] |= ((n+4) & ((ins & 2048) ? 0x0000fffc: 0x03fffffc));
+	     ((n + ((ins & 2048) ? 0x00020000 : 0)) >>
+	       ((ins & 2048) ? 18 : 28)) == 0, RANGE_REL);
+	  cp[-1] |= ((n>>2) & ((ins & 2048) ? 0x0000ffff: 0x03ffffff));
 	  break;
 	case DASM_LABEL_LG:
 	  ins &= 2047; if (ins >= 20) D->globals[ins-10] = (void *)(base + n);
